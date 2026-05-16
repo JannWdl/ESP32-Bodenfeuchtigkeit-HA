@@ -1,0 +1,118 @@
+# ─────────────────────────────────────────────────────────────
+#  ESP32 Bodenfeuchte-Monitor – Home Assistant Konfiguration
+#  Inhalt dieser Datei in configuration.yaml einfügen
+#  ODER in /config/packages/ha_config.yaml ablegen (empfohlen)
+# ─────────────────────────────────────────────────────────────
+
+mqtt:
+
+  # ── Sensoren ──────────────────────────────────────────────
+  sensor:
+    - name: "Bodenfeuchte Garten"
+      unique_id: "esp32_soil_moisture_garden"
+      state_topic: "home/garden/soil_moisture"
+      value_template: "{{ value_json.moisture }}"
+      unit_of_measurement: "%"
+      device_class: moisture
+      state_class: measurement
+      icon: mdi:water-percent
+      expire_after: 1200
+
+    - name: "Bodenfeuchte RAW"
+      unique_id: "esp32_soil_raw"
+      state_topic: "home/garden/soil_moisture"
+      value_template: "{{ value_json.raw }}"
+      icon: mdi:sine-wave
+      state_class: measurement
+
+    - name: "Bodenfeuchte Uhrzeit"
+      unique_id: "esp32_soil_time"
+      state_topic: "home/garden/soil_moisture"
+      value_template: "{{ value_json.date }} {{ value_json.time }}"
+      icon: mdi:clock-outline
+
+    - name: "Kalibrierung Trocken"
+      unique_id: "esp32_cal_dry"
+      state_topic: "home/garden/soil_moisture/calibration"
+      value_template: "{{ value_json.raw_dry }}"
+      icon: mdi:sun-thermometer
+
+    - name: "Kalibrierung Nass"
+      unique_id: "esp32_cal_wet"
+      state_topic: "home/garden/soil_moisture/calibration"
+      value_template: "{{ value_json.raw_wet }}"
+      icon: mdi:water
+
+  # ── Kalibrierungs-Buttons ──────────────────────────────────
+  button:
+    - name: "Trocken kalibrieren"
+      unique_id: "esp32_cal_dry_btn"
+      command_topic: "home/garden/soil_moisture/cmd"
+      payload_press: "cal_dry"
+      icon: mdi:sun-thermometer-outline
+
+    - name: "Nass kalibrieren"
+      unique_id: "esp32_cal_wet_btn"
+      command_topic: "home/garden/soil_moisture/cmd"
+      payload_press: "cal_wet"
+      icon: mdi:water-outline
+
+# ─────────────────────────────────────────────────────────────
+#  Automationen
+# ─────────────────────────────────────────────────────────────
+automation:
+
+  - alias: "Bodenfeuchte – Trocken Alarm"
+    id: "soil_alarm_dry"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.bodenfeuchte_garten
+        below: 30
+        for: "00:05:00"
+    action:
+      - service: persistent_notification.create
+        data:
+          title: "🔴 Pflanze braucht Wasser!"
+          message: >
+            Bodenfeuchte: {{ states('sensor.bodenfeuchte_garten') }} %
+
+  - alias: "Bodenfeuchte – Staunaesse Alarm"
+    id: "soil_alarm_wet"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.bodenfeuchte_garten
+        above: 90
+        for: "00:05:00"
+    action:
+      - service: persistent_notification.create
+        data:
+          title: "💦 Achtung Staunaesse!"
+          message: >
+            Bodenfeuchte: {{ states('sensor.bodenfeuchte_garten') }} %
+
+# ─────────────────────────────────────────────────────────────
+#  Dashboard-Karte (in Lovelace einfügen)
+# ─────────────────────────────────────────────────────────────
+#
+#  type: vertical-stack
+#  cards:
+#    - type: gauge
+#      entity: sensor.bodenfeuchte_garten
+#      name: Bodenfeuchte Garten
+#      min: 0
+#      max: 100
+#      needle: true
+#      severity:
+#        green: 50
+#        yellow: 25
+#        red: 0
+#
+#    - type: entities
+#      title: Kalibrierung
+#      entities:
+#        - sensor.kalibrierung_trocken
+#        - sensor.kalibrierung_nass
+#        - sensor.bodenfeuchte_raw
+#        - sensor.bodenfeuchte_uhrzeit
+#        - button.trocken_kalibrieren
+#        - button.nass_kalibrieren
