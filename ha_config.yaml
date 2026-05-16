@@ -57,6 +57,12 @@ mqtt:
       payload_press: "cal_wet"
       icon: mdi:water-outline
 
+    - name: "Jetzt messen"
+      unique_id: "esp32_measure_now_btn"
+      command_topic: "home/garden/soil_moisture/cmd"
+      payload_press: "measure"
+      icon: mdi:radar
+
 # ─────────────────────────────────────────────────────────────
 #  Automationen
 # ─────────────────────────────────────────────────────────────

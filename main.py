@@ -223,6 +223,7 @@ def check_telegram_commands(moisture, raw):
                     "/cal_dry   - Trocken kalibrieren\n"
                     "/cal_wet   - Nass kalibrieren\n"
                     "/cal_info  - Kalibrierung anzeigen\n"
+                    "/messen     - Sofortmessung durchfuehren\n"
                     "/ota_update - Update von GitHub laden\n"
                     "/ota_force  - Update erzwingen\n"
                     "/hilfe      - Diese Hilfe"
@@ -262,6 +263,10 @@ def check_telegram_commands(moisture, raw):
                     "Aktuell: "  + str(raw)       + " raw\n"
                     "         "  + str(pct_now)   + " %"
                 )
+            elif text in ("/messen", "/measure"):
+                global force_measure
+                force_measure = True
+                send_telegram("Sofortmessung laeuft ...")
             elif text == "/ota_update":
                 send_telegram("OTA: Prüfe auf Update von GitHub ...")
                 ota_updater.check_and_update(notify_fn=send_telegram)
@@ -320,7 +325,8 @@ def check_morning_update(moisture, raw):
 # ─────────────────────────────────────────────
 #  MQTT
 # ─────────────────────────────────────────────
-mqtt_client = None
+mqtt_client  = None
+force_measure = False  # gesetzt wenn Sofortmessung angefordert
 
 def mqtt_callback(topic, msg):
     """Empfängt Kalibrierungs- und OTA-Befehle von Home Assistant."""
@@ -338,6 +344,10 @@ def mqtt_callback(topic, msg):
     elif cmd == "ota_force":
         send_telegram("HA: Erzwinge OTA Update ...")
         ota_updater.check_and_update(force=True, notify_fn=send_telegram)
+    elif cmd == "measure":
+        global force_measure
+        force_measure = True
+        send_telegram("HA: Sofortmessung wird durchgefuehrt ...")
 
 def connect_mqtt():
     global mqtt_client
@@ -510,7 +520,22 @@ def build_html(moisture, raw):
   </div>
 </div>
 
-<footer>ESP32 NodeMCU (diymore) &nbsp;|&nbsp; MicroPython &nbsp;|&nbsp; ADC 12-bit</footer>
+<div class="card">
+  <h2>Aktionen</h2>
+  <div class="cal-grid">
+    <a class="btn" style="background:#4CAF50;color:#fff" href="/measure" onclick="this.textContent='Messe...';fetch('/measure');return false;">
+      📡 Jetzt messen
+    </a>
+    <a class="btn" style="background:#607D8B;color:#fff" href="/data" target="_blank">
+      🔗 JSON API
+    </a>
+  </div>
+  <div class="meta" style="margin-top:.8rem">
+    Seite aktualisiert sich alle 30 Sekunden automatisch
+  </div>
+</div>
+<script>setTimeout(()=>location.reload(),30000)</script>
+<footer>ESP32 NodeMCU (diymore) &nbsp;|&nbsp; MicroPython &nbsp;|&nbsp; ADC 12-bit &nbsp;|&nbsp; {ota_updater.get_version()}</footer>
 </body>
 </html>"""
 
@@ -557,6 +582,17 @@ def serve_request(cl, moisture, raw):
                 "time":     time_str(),
                 "date":     date_str()
             })
+            cl.write(
+                b"HTTP/1.1 200 OK\r\n"
+                b"Content-Type: application/json\r\n"
+                b"Access-Control-Allow-Origin: *\r\n\r\n"
+                + body.encode()
+            )
+
+        elif path == "/measure":
+            global force_measure
+            force_measure = True
+            body = ujson.dumps({"status": "ok", "message": "Sofortmessung wird durchgefuehrt"})
             cl.write(
                 b"HTTP/1.1 200 OK\r\n"
                 b"Content-Type: application/json\r\n"
@@ -631,6 +667,15 @@ def main():
 
         # ── MQTT Befehle prüfen (HA Kalibrierung) ─
         mqtt_check()
+
+        # ── Sofortmessung ──────────────────────────
+        global force_measure
+        if force_measure:
+            force_measure = False
+            moisture, raw = read_moisture()
+            publish_mqtt(moisture, raw)
+            last_publish = now
+            _send_status(moisture, raw)
 
         # ── Sensor + MQTT alle 10 Minuten ─────────
         if now - last_publish >= PUBLISH_INTERVAL:
