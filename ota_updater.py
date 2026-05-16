@@ -18,7 +18,7 @@ import gc
 #  GitHub Raw URLs deiner Dateien:
 #  https://raw.githubusercontent.com/<user>/<repo>/<branch>/<datei>
 # ─────────────────────────────────────────────
-GITHUB_USER   = "DEIN_GITHUB_USERNAME"
+GITHUB_USER   = "JannWdl"
 GITHUB_REPO   = "ESP32-Bodenfeuchtigkeit-HA"
 GITHUB_BRANCH = "main"
 
@@ -52,14 +52,16 @@ def _read_local_version():
 
 def _fetch_remote_version():
     gc.collect()
+    gc.collect()  # doppelt für mehr Heap
     try:
-        r    = urequests.get(VERSION_URL, timeout=10)
+        print("OTA: Freier Speicher:", gc.mem_free(), "bytes")
+        r    = urequests.get(VERSION_URL, timeout=15)
         data = ujson.loads(r.text)
         r.close()
         gc.collect()
         return data.get("version", "0.0.0")
     except Exception as e:
-        print("OTA Version-Check Fehler:", e)
+        print("OTA Version-Check Fehler:", type(e).__name__, e)
         gc.collect()
         return None
 
@@ -68,6 +70,7 @@ def _download_file(filename):
     url  = _raw_url(filename)
     dest = filename + ".new"
     print("OTA Download:", url)
+    gc.collect()
     gc.collect()
     try:
         r = urequests.get(url, timeout=30)
